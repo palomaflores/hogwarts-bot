@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 import json
+from datetime import datetime, time
 import os
 from dotenv import load_dotenv
 
@@ -113,6 +114,31 @@ async def boas_vindas(interaction: discord.Interaction, canal: discord.TextChann
     save_config(config)
     await interaction.response.send_message(f"Canal de boas-vindas definido como {canal.mention}")
 
+# Comando para registrar aniversário
+@Hogwarts.tree.command(name="meu-aniversário", description="Registre seu aniversário!")
+@app_commands.describe(
+    day="Dia do seu aniversário",
+    month="Mês do seu aniversário"
+)
+async def my_birthday(interaction: discord.Interaction, day: int, month: int):
+    try:
+        # Valida se o dia/mês formam uma data válida (ano fixo apenas para validação)
+        datetime(year=2000, month=month, day=day)
+    except ValueError:
+        await interaction.response.send_message(
+            "Data inválida. Use um dia e mês corretos"
+        )
+        return
+    
+    # Carrega os aniversários salvos, salva a data do usuário que executou o comando e atualiza o arquivo com o novo aniversário
+    data = load_birthdays()
+    data[str(interaction.user.id)] = {"day": day, "month": month}
+    save_birthdays(data)
+
+    await interaction.response.send_message(
+        f"Aniversário registardo para **{day:02d}/{month:02d}**, {interaction.user.mention}!",
+    )
+    
 # Comando para escolher o canal de aniversários
 @Hogwarts.tree.command(name="canal-aniversário", description="Defina o canal onde as mensagens de aniversário serão enviadas")
 @app_commands.describe(canal="Escolha o canal")
