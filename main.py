@@ -4,6 +4,8 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import json
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
+from datetime import time as dt_time
 import os
 from dotenv import load_dotenv
 
@@ -34,15 +36,13 @@ def save_birthdays(data):
     with open("aniversários.json", "w") as f:
         json.dump(data, f, indent=4)
 
-birthdays = load_birthdays()
-
 # Carregar as configurações do arquivo 'config.json'
 def load_config():
     try:
         # Abre o arquivo 'config.json' no modo de leitura
         with open("config.json", "r") as f:
             return json.load(f) # Carrega e retorna os dados em formato de dicionário
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         # Retorna um arquivo vazio se o dicionário não for encontrado
         return {}
 
@@ -57,6 +57,7 @@ def save_config(data):
 @Hogwarts.event
 async def on_ready():
     await Hogwarts.tree.sync()
+    check_birthdays.start()
     print(f'O bot {Hogwarts.user} foi iniciado e seus comandos estão sincronizados!')
 
 # Comando para atribuir o cargo 'Membro' automaticamente e enviar mensagem de boas-vindas a novos usuários
@@ -75,13 +76,14 @@ async def on_member_join(member):
         except discord.Forbidden:
             print(f"Permissões insuficientes para adicionar cargo.")
         except Exception as e:
-            print("Erro HTTP ao atribuir o cargo: {e}")
+            print(f"Erro HTTP ao atribuir o cargo: {e}")
     else:
            print(f"Cargo não encontrado")
 
     # Busca o canal de boas-vindas configurado
     config = load_config()
-    channel_id = config.get(str(guild.id))
+    guild_config = config.get(str(guild.id), {})
+    channel_id = guild_config.get("boas_vindas")
     if not channel_id:
         print(f"Nenhum canal configurado para o servidor '{guild.name}' (ID: {guild.id}).")
         return
@@ -110,7 +112,12 @@ async def on_member_join(member):
 @app_commands.describe(canal="Escolha o canal")
 async def boas_vindas(interaction: discord.Interaction, canal: discord.TextChannel):
     config = load_config()
-    config[str(interaction.guild.id)] = canal.id
+    guild_id = str(interaction.guild.id)
+
+    if guild_id not in config or not isinstance(config[guild_id], dict):
+        config[guild_id] = {}
+
+    config[guild_id]["boas_vindas"] = canal.id
     save_config(config)
     await interaction.response.send_message(f"Canal de boas-vindas definido como {canal.mention}")
 
@@ -136,7 +143,7 @@ async def my_birthday(interaction: discord.Interaction, day: int, month: int):
     save_birthdays(data)
 
     await interaction.response.send_message(
-        f"Aniversário registardo para **{day:02d}/{month:02d}**, {interaction.user.mention}!",
+        f"Aniversário registrado para **{day:02d}/{month:02d}**, {interaction.user.mention}!",
     )
     
 # Comando para escolher o canal de aniversários
@@ -144,9 +151,79 @@ async def my_birthday(interaction: discord.Interaction, day: int, month: int):
 @app_commands.describe(canal="Escolha o canal")
 async def set_aniversario(interaction: discord.Interaction, canal: discord.TextChannel):
     config = load_config()
-    config[str(interaction.guild.id)] = canal.id
+    # Obtém o ID do servidor (guild) como uma string
+    guild_id = str(interaction.guild.id)
+
+    # Verifica se o servidor ainda não possui configurações salvas
+    if guild_id not in config:
+        config[guild_id] = {} # Cria uma nova entrada para o servidor
+
+    # Define o ID do canal onde as mensagens de aniversário serão enviadas
+    config[guild_id]["aniversario"] = canal.id
     save_config(config)
-    await interaction.response.send_message(f"Canal de aniversáiro definido como {canal.mention}")
+    
+    await interaction.response.send_message(f"Canal de aniversário definido como {canal.mention}")
+
+# Tarefa que roda a cada 1 minuto para verificar aniversários
+@tasks.loop(minutes=1)
+async def check_birthdays():
+    await Hogwarts.wait_until_ready()
+    
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    if now.hour != 0 or now.minute != 0:
+        return
+
+    # Carrega os dados de aniversários e configurações dos servidores
+    birthdays = load_birthdays()
+    config = load_config()
+
+    # Itera sobre todos os servidores em que o bot está
+    for guild in Hogwarts.guilds:
+        guild_config = config.get(str(guild.id), {})
+        channel_id = guild_config.get("aniversario")
+        
+        if not channel_id:
+            print(f"Nenhum canal configurado para aniversários em {guild.name}")
+            continue
+
+        channel = guild.get_channel(channel_id)
+        if not channel:
+            print(f"Canal não encontrado no servidor {guild.name}")
+            continue
+
+        # Itera sobre os aniversários registrados
+        for user_id, date in birthdays.items():
+            if date["day"] == now.day and date["month"] == now.month:
+                try:
+                    # Busca o membro no servidor usando o ID
+                    user = await guild.fetch_member(int(user_id))
+                except discord.NotFound:
+                     # Se o usuário não estiver mais no servidor, ignora
+                    continue
+
+                try:
+                     # Carrega uma mensagem personalizada de aniversário, se houver
+                    with open("mensagens.json", "r", encoding="utf-8") as f:
+                        mensagens = json.load(f)
+                    mensagem = mensagens.get(str(guild.id))
+                except FileNotFoundError:
+                    mensagem = None
+
+                 # Usa uma mensagem padrão caso não tenha uma personalizada
+                if not mensagem:
+                    mensagem = "{user}, feliz aniversário! Esperamos que o seu dia seja tão incrível quanto um banquete no Salão Principal! 🎂"
+
+                # Substitui o placeholder {user} pela menção do usuário            
+                mensagem_final = mensagem.replace("{user}", user.mention)
+
+                embed = discord.Embed(
+                    title="FELIZ ANIVERSÁRIO!",
+                    description=mensagem_final,
+                    color=discord.Color.gold()
+                )
+                
+                # Envia a mensagem no canal configurado, com menção ao usuário
+                await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions(users=True))
 
 # Carrega o bot
 Hogwarts.run(token)
