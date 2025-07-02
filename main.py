@@ -45,7 +45,30 @@ async def on_member_join(member):
         except Exception as e:
             print("Erro HTTP ao atribuir o cargo: {e}")
     else:
-            print(f"Cargo '{role.name}' não encontrado")
+           print(f"Cargo não encontrado")
+
+    config = load_config()
+    channel_id = config.get(str(guild.id))
+    if not channel_id:
+        print(f"Nenhum canal configurado para o servidor '{guild.name}' (ID: {guild.id}).")
+        return
+    else:
+        print(f"Canal configurado para o servidor '{guild.name}': ID {channel_id}")
+
+    channel = guild.get_channel(channel_id)
+    if not channel:
+        print(f"Canal com ID {channel_id} não encontrado no servidor '{guild.name}'!")
+        return
+    else:
+        print(f"Canal encontrado: #{channel.name} (ID: {channel.id})")
+
+    try:
+        await channel.send(
+            f"Prezado(a) Sr.(a) {member.mention}, temos o prazer de informar que V. Sa. tem uma vaga na Escola de Magia e Bruxaria de Hogwarts. Estamos anexando uma lista dos livros e equipamentos necessários. O ano letivo começa em 1º de setembro! Aguardamos sua coruja até 31 de julho, no mais tardar. 🧙‍♂️"
+        )
+        print(f"Mensagem de boas-vindas enviada para {member.name} no canal #{channel.name}")
+    except Exception as e:
+        print(f"Falha ao enviar mensagem de boas-vindas: {e}")
             
 @Hogwarts.tree.command(name="boas-vindas", description="Define o canal onde as mensagem de boas-vindas serão enviadas")
 @app_commands.describe(canal="Escolha o canal")
