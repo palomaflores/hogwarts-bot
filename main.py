@@ -78,4 +78,12 @@ async def boas_vindas(interaction: discord.Interaction, canal: discord.TextChann
     save_config(config)
     await interaction.response.send_message(f"Canal de boas-vindas definido como {canal.mention}")
 
+@Hogwarts.tree.command(name="canal-aniversário", description="Defina o canal onde as mensagens de aniversário serão enviadas")
+@app_commands.describe(canal="Escolha o canal")
+async def set_aniversario(interaction: discord.Interaction, canal: discord.TextChannel):
+    config = load_config()
+    config[str(interaction.guild.id)] = canal.id
+    save_config(config)
+    await interaction.response.send_message(f"Canal de aniversáiro definido como {canal.mention}")
+
 Hogwarts.run(token)
