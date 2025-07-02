@@ -13,6 +13,23 @@ intents.message_content = True
 intents.members = True
 Hogwarts = commands.Bot(command_prefix='/', intents=intents)
 
+def load_birthdays():
+    if os.path.exists("aniversários.json"):
+        try:
+            with open("aniversários.json", "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print("Erro: Arquivo JSON corrompido!")
+        except FileNotFoundError:
+            print("Error: Arquivo não encontrado!")
+    return {}
+
+def save_birthdays(data):
+    with open("aniversários.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+birthdays = load_birthdays()
+
 def load_config():
     try:
         with open("config.json", "r") as f:
