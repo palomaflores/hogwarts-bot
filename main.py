@@ -170,7 +170,7 @@ async def check_birthdays():
     await Hogwarts.wait_until_ready()
     
     now = datetime.now(ZoneInfo("America/Sao_Paulo"))
-    if now.hour != 0 or now.minute != 0:
+    if now.hour != 21 or now.minute != 50:
         return
 
     # Carrega os dados de aniversários e configurações dos servidores
@@ -209,7 +209,7 @@ async def check_birthdays():
                 except FileNotFoundError:
                     mensagem = None
 
-                 # Usa uma mensagem padrão caso não tenha uma personalizada
+                 # Mensagem padrão caso não tenha uma personalizada
                 if not mensagem:
                     mensagem = "{user}, feliz aniversário! Esperamos que o seu dia seja tão incrível quanto um banquete no Salão Principal! 🎂"
 
@@ -225,5 +225,27 @@ async def check_birthdays():
                 # Envia a mensagem no canal configurado, com menção ao usuário
                 await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions(users=True))
 
-# Carrega o bot
+# Comando para configurar mensagem de feliz aniversário
+@Hogwarts.tree.command(name="mensagem-aniversario", description="Configure a mensagem personalizada de feliz aniversário.")
+@app_commands.describe(mensagem="Use {user} para mencionar o aniversariante automaticamente.")
+async def set_birthday_message(interaction: discord.Interaction, mensagem: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Apenas administradores podem usar este comando.")
+        return
+
+    # Carrega o arquivo de mensagens personalizadas
+    try:
+        with open("mensagens.json", "r", encoding="utf-8") as f:
+            mensagens = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        mensagens = {}
+
+    mensagens[str(interaction.guild.id)] = mensagem
+
+    # Salva a mensagem personalizada no arquivo 'mensagens.json'
+    with open("mensagens.json", "w", encoding="utf-8") as f:
+        json.dump(mensagens, f, indent=4, ensure_ascii=False)
+
+    await interaction.response.send_message("Mensagem de aniversário configurada com sucesso!")
+
 Hogwarts.run(token)
